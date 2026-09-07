@@ -1,0 +1,272 @@
+'use server';
+
+import { supabase } from '@/lib/supabase';
+import { Platform, AssetClass, Asset, AssetSnapshot } from '@/lib/types';
+import { DEFAULT_PLATFORMS, DEFAULT_ASSET_CLASSES, DEFAULT_ASSETS, generateDemoSnapshots } from '@/lib/store';
+import { revalidatePath } from 'next/cache';
+
+// Fetch Platforms
+export async function getPlatforms(): Promise<Platform[]> {
+  try {
+    const { data, error } = await supabase
+      .from('wt_platforms')
+      .select('*')
+      .order('name');
+    if (error || !data || data.length === 0) {
+      return DEFAULT_PLATFORMS;
+    }
+    return data;
+  } catch {
+    return DEFAULT_PLATFORMS;
+  }
+}
+
+// Fetch Asset Classes
+export async function getAssetClasses(): Promise<AssetClass[]> {
+  try {
+    const { data, error } = await supabase
+      .from('wt_asset_classes')
+      .select('*')
+      .order('name');
+    if (error || !data || data.length === 0) {
+      return DEFAULT_ASSET_CLASSES;
+    }
+    return data;
+  } catch {
+    return DEFAULT_ASSET_CLASSES;
+  }
+}
+
+// Fetch Assets
+export async function getAssets(): Promise<Asset[]> {
+  try {
+    const { data, error } = await supabase
+      .from('wt_assets')
+      .select(`
+        *,
+        platform:wt_platforms(*),
+        asset_class:wt_asset_classes(*)
+      `)
+      .order('name');
+
+    if (error || !data || data.length === 0) {
+      const platforms = DEFAULT_PLATFORMS;
+      const classes = DEFAULT_ASSET_CLASSES;
+      return DEFAULT_ASSETS.map((a) => ({
+        ...a,
+        platform: platforms.find((p) => p.id === a.platform_id),
+        asset_class: classes.find((c) => c.id === a.asset_class_id),
+      }));
+    }
+
+    return data;
+  } catch {
+    const platforms = DEFAULT_PLATFORMS;
+    const classes = DEFAULT_ASSET_CLASSES;
+    return DEFAULT_ASSETS.map((a) => ({
+      ...a,
+      platform: platforms.find((p) => p.id === a.platform_id),
+      asset_class: classes.find((c) => c.id === a.asset_class_id),
+    }));
+  }
+}
+
+// Fetch Asset Snapshots
+export async function getSnapshots(): Promise<AssetSnapshot[]> {
+  try {
+    const { data, error } = await supabase
+      .from('wt_asset_snapshots')
+      .select('*')
+      .order('snapshot_date', { ascending: true });
+
+    if (error || !data || data.length === 0) {
+      return generateDemoSnapshots(DEFAULT_ASSETS);
+    }
+
+    return data.map((s) => ({
+      ...s,
+      value: Number(s.value),
+    }));
+  } catch {
+    return generateDemoSnapshots(DEFAULT_ASSETS);
+  }
+}
+
+// Create Platform
+export async function createPlatform(name: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('wt_platforms')
+      .insert({ name });
+
+    if (error) throw error;
+    revalidatePath('/');
+    revalidatePath('/assets');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to create platform' };
+  }
+}
+
+// Create Asset Class
+export async function createAssetClass(name: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('wt_asset_classes')
+      .insert({ name });
+
+    if (error) throw error;
+    revalidatePath('/');
+    revalidatePath('/assets');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to create asset class' };
+  }
+}
+
+// Create Asset
+export async function createAsset(asset: {
+  platform_id: string;
+  asset_class_id: string;
+  name: string;
+  currency?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.from('wt_assets').insert({
+      platform_id: asset.platform_id,
+      asset_class_id: asset.asset_class_id,
+      name: asset.name,
+      currency: asset.currency || 'USD',
+      is_active: true,
+    });
+
+    if (error) throw error;
+    revalidatePath('/');
+    revalidatePath('/assets');
+    revalidatePath('/snapshots');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to create asset' };
+  }
+}
+
+// Toggle Asset Active Status
+export async function toggleAssetActive(
+  assetId: string,
+  isActive: boolean
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('wt_assets')
+      .update({ is_active: isActive })
+      .eq('id', assetId);
+
+    if (error) throw error;
+    revalidatePath('/');
+    revalidatePath('/assets');
+    revalidatePath('/snapshots');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to update asset status' };
+  }
+}
+
+// Save Batch Snapshots
+export async function saveBatchSnapshots(
+  entries: { asset_id: string; value: number; snapshot_date: string; notes?: string }[]
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const validEntries = entries.filter((e) => e.value !== null && !isNaN(e.value));
+    if (validEntries.length === 0) {
+      return { success: false, error: 'No valid snapshot values provided.' };
+    }
+
+    const { error } = await supabase.from('wt_asset_snapshots').upsert(
+      validEntries.map((e) => ({
+        asset_id: e.asset_id,
+        snapshot_date: e.snapshot_date,
+        value: e.value,
+        notes: e.notes || null,
+      })),
+      { onConflict: 'asset_id,snapshot_date' }
+    );
+
+    if (error) throw error;
+    revalidatePath('/');
+    revalidatePath('/snapshots');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to save snapshots' };
+  }
+}
+
+// Seed Demo Data into Supabase
+export async function seedDemoDataAction(): Promise<{ success: boolean; error?: string }> {
+  try {
+    // 1. Seed Platforms
+    const { data: platforms, error: pErr } = await supabase
+      .from('wt_platforms')
+      .upsert(DEFAULT_PLATFORMS.map((p) => ({ name: p.name })), { onConflict: 'name' })
+      .select();
+
+    if (pErr) throw pErr;
+
+    // 2. Seed Asset Classes
+    const { data: classes, error: cErr } = await supabase
+      .from('wt_asset_classes')
+      .upsert(DEFAULT_ASSET_CLASSES.map((c) => ({ name: c.name })), { onConflict: 'name' })
+      .select();
+
+    if (cErr) throw cErr;
+
+    if (!platforms || !classes) throw new Error('Failed to retrieve seeded metadata');
+
+    // Map platforms and classes by name
+    const platformMap = new Map(platforms.map((p) => [p.name, p.id]));
+    const classMap = new Map(classes.map((c) => [c.name, c.id]));
+
+    // 3. Seed Assets
+    const assetsToInsert = DEFAULT_ASSETS.map((a) => {
+      const pName = DEFAULT_PLATFORMS.find((p) => p.id === a.platform_id)?.name || 'Fidelity';
+      const cName = DEFAULT_ASSET_CLASSES.find((c) => c.id === a.asset_class_id)?.name || 'Equities';
+      return {
+        name: a.name,
+        currency: a.currency,
+        is_active: a.is_active,
+        platform_id: platformMap.get(pName) || platforms[0].id,
+        asset_class_id: classMap.get(cName) || classes[0].id,
+      };
+    });
+
+    const { data: insertedAssets, error: aErr } = await supabase
+      .from('wt_assets')
+      .upsert(assetsToInsert, { onConflict: 'name' })
+      .select();
+
+    if (aErr) throw aErr;
+    if (!insertedAssets) throw new Error('Failed to seed assets');
+
+    // 4. Seed Snapshots
+    const demoSnapshots = generateDemoSnapshots(insertedAssets as Asset[]);
+    const snapshotsToInsert = demoSnapshots.map((s) => ({
+      asset_id: s.asset_id,
+      snapshot_date: s.snapshot_date,
+      value: s.value,
+      notes: s.notes,
+    }));
+
+    const { error: sErr } = await supabase
+      .from('wt_asset_snapshots')
+      .upsert(snapshotsToInsert, { onConflict: 'asset_id,snapshot_date' });
+
+    if (sErr) throw sErr;
+
+    revalidatePath('/');
+    revalidatePath('/snapshots');
+    revalidatePath('/assets');
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to seed database' };
+  }
+}
