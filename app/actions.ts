@@ -22,6 +22,18 @@ export async function authenticateUserAction(username: string, passHash: string)
       if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
         return { success: false, error: 'TABLE_NOT_FOUND' };
       }
+      if (error.code === 'PGRST204' || error.message?.includes('is_2fa_enabled')) {
+        // If 2FA columns not added to DB yet, fallback query basic credentials
+        const { data: basicUsers } = await supabase
+          .from('wt_users')
+          .select('id, username, password_hash')
+          .ilike('username', username.trim());
+
+        if (basicUsers && basicUsers.length > 0 && basicUsers[0].password_hash === passHash) {
+          return { success: true, is2FAEnabled: false };
+        }
+        return { success: false, error: 'Incorrect password.' };
+      }
       throw error;
     }
 
@@ -85,7 +97,7 @@ export async function enable2FAAction(username: string, secret: string): Promise
     if (error) throw error;
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to enable 2FA' };
+    return { success: false, error: err.message || 'Failed to enable 2FA in database. Please run SQL migration script.' };
   }
 }
 
