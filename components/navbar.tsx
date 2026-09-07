@@ -2,11 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Wallet, LayoutDashboard, PlusCircle, Settings, Database, Lock, LogOut, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { Wallet, LayoutDashboard, PlusCircle, Settings, Database, Lock, LogOut, Eye, EyeOff, KeyRound, Smartphone } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { seedDemoDataAction } from '@/app/actions';
 import { usePrivacy } from '@/context/privacy-context';
-import { ChangePasscodeModal } from '@/components/auth/passcode-lock';
+import { ChangePasscodeModal, Setup2FAModal } from '@/components/auth/passcode-lock';
 
 interface NavbarProps {
   netWorth?: number;
@@ -14,10 +14,11 @@ interface NavbarProps {
 
 export function Navbar({ netWorth }: NavbarProps) {
   const pathname = usePathname();
-  const { isPrivacyMode, togglePrivacyMode, lockApp, formatCurrency, username } = usePrivacy();
+  const { isPrivacyMode, togglePrivacyMode, lockApp, formatCurrency, username, is2FAEnabled } = usePrivacy();
   const [isPending, startTransition] = useTransition();
   const [seedMessage, setSeedMessage] = useState<string | null>(null);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [is2FASetupOpen, setIs2FASetupOpen] = useState(false);
 
   const handleSeed = () => {
     setSeedMessage('Seeding 5-year demo history...');
@@ -103,6 +104,19 @@ export function Navbar({ netWorth }: NavbarProps) {
               {isPrivacyMode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
 
+            {/* 2FA Setup Toggle */}
+            <button
+              onClick={() => setIs2FASetupOpen(true)}
+              title={is2FAEnabled ? '2FA Enabled (Click to manage)' : 'Setup 2FA Authenticator'}
+              className={`p-2 rounded-lg border text-xs font-medium transition-all ${
+                is2FAEnabled
+                  ? 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60'
+                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Smartphone className="w-4 h-4" />
+            </button>
+
             {/* Change Password */}
             <button
               onClick={() => setIsChangePasswordOpen(true)}
@@ -143,6 +157,7 @@ export function Navbar({ netWorth }: NavbarProps) {
       </header>
 
       <ChangePasscodeModal isOpen={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)} />
+      <Setup2FAModal isOpen={is2FASetupOpen} onClose={() => setIs2FASetupOpen(false)} />
     </>
   );
 }

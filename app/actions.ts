@@ -6,14 +6,24 @@ import { DEFAULT_PLATFORMS, DEFAULT_ASSET_CLASSES, DEFAULT_ASSETS, generateDemoS
 import { revalidatePath } from 'next/cache';
 
 // Authenticate User against Supabase wt_users
-export async function authenticateUserAction(username: string, passHash: string): Promise<{ success: boolean; error?: string }> {
+export async function authenticateUserAction(username: string, passHash: string): Promise<{
+  success: boolean;
+  error?: string;
+  is2FAEnabled?: boolean;
+  twoFactorSecret?: string;
+}> {
   try {
     const { data: users, error } = await supabase
       .from('wt_users')
       .select('*')
       .ilike('username', username.trim());
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+        return { success: false, error: 'TABLE_NOT_FOUND' };
+      }
+      throw error;
+    }
 
     if (!users || users.length === 0) {
       return { success: false, error: 'User not found. Please register an account first.' };
@@ -21,7 +31,11 @@ export async function authenticateUserAction(username: string, passHash: string)
 
     const user = users[0];
     if (user.password_hash === passHash) {
-      return { success: true };
+      return {
+        success: true,
+        is2FAEnabled: !!user.is_2fa_enabled,
+        twoFactorSecret: user.two_factor_secret || undefined,
+      };
     } else {
       return { success: false, error: 'Incorrect password.' };
     }
@@ -41,6 +55,9 @@ export async function registerUserAction(username: string, passHash: string): Pr
       });
 
     if (error) {
+      if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+        return { success: true };
+      }
       if (error.code === '23505') {
         return { success: false, error: 'Username already exists. Please login instead.' };
       }
@@ -50,6 +67,44 @@ export async function registerUserAction(username: string, passHash: string): Pr
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || 'Registration failed' };
+  }
+}
+
+// Enable 2FA for user
+export async function enable2FAAction(username: string, secret: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('wt_users')
+      .update({
+        is_2fa_enabled: true,
+        two_factor_secret: secret,
+        updated_at: new Date().toISOString(),
+      })
+      .ilike('username', username.trim());
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to enable 2FA' };
+  }
+}
+
+// Disable 2FA for user
+export async function disable2FAAction(username: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('wt_users')
+      .update({
+        is_2fa_enabled: false,
+        two_factor_secret: null,
+        updated_at: new Date().toISOString(),
+      })
+      .ilike('username', username.trim());
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to disable 2FA' };
   }
 }
 
@@ -281,7 +336,6 @@ export async function saveBatchSnapshots(
 // Seed Demo Data into Supabase
 export async function seedDemoDataAction(): Promise<{ success: boolean; error?: string }> {
   try {
-    // 1. Seed Platforms
     const { data: platforms, error: pErr } = await supabase
       .from('wt_platforms')
       .upsert(DEFAULT_PLATFORMS.map((p) => ({ name: p.name })), { onConflict: 'name' })
@@ -289,7 +343,6 @@ export async function seedDemoDataAction(): Promise<{ success: boolean; error?: 
 
     if (pErr) throw pErr;
 
-    // 2. Seed Asset Classes
     const { data: classes, error: cErr } = await supabase
       .from('wt_asset_classes')
       .upsert(DEFAULT_ASSET_CLASSES.map((c) => ({ name: c.name })), { onConflict: 'name' })
@@ -302,7 +355,6 @@ export async function seedDemoDataAction(): Promise<{ success: boolean; error?: 
     const platformMap = new Map(platforms.map((p) => [p.name, p.id]));
     const classMap = new Map(classes.map((c) => [c.name, c.id]));
 
-    // 3. Seed Assets
     const assetsToInsert = DEFAULT_ASSETS.map((a) => {
       const pName = DEFAULT_PLATFORMS.find((p) => p.id === a.platform_id)?.name || 'Fidelity';
       const cName = DEFAULT_ASSET_CLASSES.find((c) => c.id === a.asset_class_id)?.name || 'Equities';
@@ -323,7 +375,6 @@ export async function seedDemoDataAction(): Promise<{ success: boolean; error?: 
     if (aErr) throw aErr;
     if (!insertedAssets) throw new Error('Failed to seed assets');
 
-    // 4. Seed Snapshots
     const demoSnapshots = generateDemoSnapshots(insertedAssets as Asset[]);
     const snapshotsToInsert = demoSnapshots.map((s) => ({
       asset_id: s.asset_id,

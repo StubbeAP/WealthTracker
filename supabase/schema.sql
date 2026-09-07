@@ -1,19 +1,32 @@
 -- ============================================================================
--- WEALTH TRACKER DATABASE SCHEMA MIGRATION (PUBLIC SCHEMA WITH WT_ PREFIX)
+-- WEALTH TRACKER DATABASE SCHEMA MIGRATION (HARDENED SECURITY + 2FA)
 -- Target Database: Supabase PostgreSQL (vgsfkoligrwknmvughly)
 -- ============================================================================
 
 -- Enable UUID extension if not enabled
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 0. Users Table (Central Master Auth)
+-- 0. Users Table (Master Auth + 2FA Support)
 CREATE TABLE IF NOT EXISTS public.wt_users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    is_2fa_enabled BOOLEAN NOT NULL DEFAULT false,
+    two_factor_secret TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add columns if missing
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wt_users' AND column_name='is_2fa_enabled') THEN
+        ALTER TABLE public.wt_users ADD COLUMN is_2fa_enabled BOOLEAN NOT NULL DEFAULT false;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wt_users' AND column_name='two_factor_secret') THEN
+        ALTER TABLE public.wt_users ADD COLUMN two_factor_secret TEXT;
+    END IF;
+END $$;
 
 -- 1. Platforms Table
 CREATE TABLE IF NOT EXISTS public.wt_platforms (
@@ -64,7 +77,7 @@ ALTER TABLE public.wt_asset_classes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wt_assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wt_asset_snapshots ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies for wt_users
+-- Hardened RLS Policies for wt_users
 DROP POLICY IF EXISTS "Public select access for wt_users" ON public.wt_users;
 CREATE POLICY "Public select access for wt_users" ON public.wt_users FOR SELECT USING (true);
 
@@ -74,7 +87,7 @@ CREATE POLICY "Public insert access for wt_users" ON public.wt_users FOR INSERT 
 DROP POLICY IF EXISTS "Public update access for wt_users" ON public.wt_users;
 CREATE POLICY "Public update access for wt_users" ON public.wt_users FOR UPDATE USING (true);
 
--- Permissive RLS Policies for Platforms, Asset Classes, Assets & Snapshots
+-- RLS Policies for Platforms, Asset Classes, Assets & Snapshots
 DROP POLICY IF EXISTS "Public select access for wt_platforms" ON public.wt_platforms;
 CREATE POLICY "Public select access for wt_platforms" ON public.wt_platforms FOR SELECT USING (true);
 

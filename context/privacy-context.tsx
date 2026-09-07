@@ -1,7 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { authenticateUserAction, registerUserAction, changePasswordAction } from '@/app/actions';
+import { authenticateUserAction, registerUserAction, changePasswordAction, enable2FAAction, disable2FAAction } from '@/app/actions';
+import { verifyTOTP } from '@/lib/totp';
 
 interface PrivacyContextType {
   isPrivacyMode: boolean;
@@ -9,10 +10,16 @@ interface PrivacyContextType {
   isLocked: boolean;
   hasAccount: boolean;
   username: string;
+  is2FAEnabled: boolean;
+  requires2FA: boolean;
+  pendingSecret: string | null;
   lockApp: () => void;
-  login: (user: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  login: (user: string, pass: string) => Promise<{ success: boolean; requires2FA?: boolean; error?: string }>;
+  verify2FA: (code: string) => Promise<{ success: boolean; error?: string }>;
   registerAccount: (user: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   changePassword: (currentPass: string, newPass: string) => Promise<{ success: boolean; error?: string }>;
+  enable2FAService: (secret: string, code: string) => Promise<{ success: boolean; error?: string }>;
+  disable2FAService: () => Promise<{ success: boolean; error?: string }>;
   formatCurrency: (amount: number | null | undefined, forceDigits?: number) => string;
 }
 
@@ -36,6 +43,11 @@ export const PrivacyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [hasAccount, setHasAccount] = useState<boolean>(true);
   const [failedAttempts, setFailedAttempts] = useState<number>(0);
   const [lockoutTime, setLockoutTime] = useState<number | null>(null);
+
+  // 2FA state
+  const [is2FAEnabled, setIs2FAEnabled] = useState<boolean>(false);
+  const [requires2FA, setRequires2FA] = useState<boolean>(false);
+  const [pendingSecret, setPendingSecret] = useState<string | null>(null);
 
   useEffect(() => {
     const storedUser = localStorage.getItem(USER_STORAGE_KEY);
@@ -64,6 +76,7 @@ export const PrivacyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
         setIsLocked(true);
+        setRequires2FA(false);
       }, 5 * 60 * 1000);
     };
 
@@ -93,6 +106,7 @@ export const PrivacyProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const lockApp = useCallback(() => {
     setIsLocked(true);
+    setRequires2FA(false);
   }, []);
 
   const registerAccount = useCallback(async (user: string, pass: string) => {
@@ -101,17 +115,15 @@ export const PrivacyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     const passHash = await hashPassword(pass);
-
-    // 1. Save to Supabase wt_users
     const dbRes = await registerUserAction(user, passHash);
     if (!dbRes.success) {
       return dbRes;
     }
 
-    // 2. Cache locally
     setUsername(user);
     setHasAccount(true);
     setIsLocked(false);
+    setRequires2FA(false);
 
     localStorage.setItem(USER_STORAGE_KEY, user);
     localStorage.setItem(HASH_STORAGE_KEY, passHash);
@@ -130,27 +142,35 @@ export const PrivacyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       const inputHash = await hashPassword(pass);
-
-      // Authenticate against Supabase wt_users
       const res = await authenticateUserAction(user, inputHash);
 
       if (res.success) {
         setUsername(user);
+        setIs2FAEnabled(!!res.is2FAEnabled);
+
+        if (res.is2FAEnabled && res.twoFactorSecret) {
+          setRequires2FA(true);
+          setPendingSecret(res.twoFactorSecret);
+          return { success: true, requires2FA: true };
+        }
+
         setIsLocked(false);
+        setRequires2FA(false);
         setFailedAttempts(0);
         setLockoutTime(null);
 
         localStorage.setItem(USER_STORAGE_KEY, user);
         localStorage.setItem(HASH_STORAGE_KEY, inputHash);
-        return { success: true };
+        return { success: true, requires2FA: false };
       }
 
-      // Check local fallback hash if Supabase user table hasn't been created yet
+      // Check local fallback hash if table missing
       const localHash = localStorage.getItem(HASH_STORAGE_KEY);
       const localUser = localStorage.getItem(USER_STORAGE_KEY);
       if (localHash && localHash === inputHash && localUser?.toLowerCase() === user.toLowerCase()) {
         setUsername(user);
         setIsLocked(false);
+        setRequires2FA(false);
         setFailedAttempts(0);
         setLockoutTime(null);
         return { success: true };
@@ -176,6 +196,53 @@ export const PrivacyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [failedAttempts, lockoutTime]
   );
 
+  const verify2FA = useCallback(
+    async (code: string) => {
+      if (!pendingSecret) {
+        return { success: false, error: 'No 2FA secret pending.' };
+      }
+
+      const isValid = await verifyTOTP(pendingSecret, code);
+      if (isValid) {
+        setIsLocked(false);
+        setRequires2FA(false);
+        setPendingSecret(null);
+        return { success: true };
+      }
+
+      return { success: false, error: 'Invalid 6-digit Authenticator code.' };
+    },
+    [pendingSecret]
+  );
+
+  const enable2FAService = useCallback(
+    async (secret: string, code: string) => {
+      const isValid = await verifyTOTP(secret, code);
+      if (!isValid) {
+        return { success: false, error: 'Invalid 6-digit code. Please check your Authenticator app.' };
+      }
+
+      const res = await enable2FAAction(username, secret);
+      if (res.success) {
+        setIs2FAEnabled(true);
+        setPendingSecret(secret);
+        return { success: true };
+      }
+      return res;
+    },
+    [username]
+  );
+
+  const disable2FAService = useCallback(async () => {
+    const res = await disable2FAAction(username);
+    if (res.success) {
+      setIs2FAEnabled(false);
+      setPendingSecret(null);
+      return { success: true };
+    }
+    return res;
+  }, [username]);
+
   const changePassword = useCallback(
     async (currentPass: string, newPass: string) => {
       if (newPass.length < 8) {
@@ -191,7 +258,6 @@ export const PrivacyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return { success: true };
       }
 
-      // Fallback local update
       const localHash = localStorage.getItem(HASH_STORAGE_KEY);
       if (localHash === currentHash) {
         localStorage.setItem(HASH_STORAGE_KEY, newHash);
@@ -223,10 +289,16 @@ export const PrivacyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isLocked,
         hasAccount,
         username,
+        is2FAEnabled,
+        requires2FA,
+        pendingSecret,
         lockApp,
         login,
+        verify2FA,
         registerAccount,
         changePassword,
+        enable2FAService,
+        disable2FAService,
         formatCurrency,
       }}
     >
