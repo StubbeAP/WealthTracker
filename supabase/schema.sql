@@ -6,6 +6,15 @@
 -- Enable UUID extension if not enabled
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- 0. Users Table (Central Master Auth)
+CREATE TABLE IF NOT EXISTS public.wt_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 1. Platforms Table
 CREATE TABLE IF NOT EXISTS public.wt_platforms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -43,17 +52,29 @@ CREATE TABLE IF NOT EXISTS public.wt_asset_snapshots (
 );
 
 -- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_wt_users_username ON public.wt_users(username);
 CREATE INDEX IF NOT EXISTS idx_wt_assets_platform ON public.wt_assets(platform_id);
 CREATE INDEX IF NOT EXISTS idx_wt_assets_class ON public.wt_assets(asset_class_id);
 CREATE INDEX IF NOT EXISTS idx_wt_snapshots_asset_date ON public.wt_asset_snapshots(asset_id, snapshot_date DESC);
 
 -- Enable RLS
+ALTER TABLE public.wt_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wt_platforms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wt_asset_classes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wt_assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wt_asset_snapshots ENABLE ROW LEVEL SECURITY;
 
--- Permissive RLS Policies for Anon/Authenticated access
+-- RLS Policies for wt_users
+DROP POLICY IF EXISTS "Public select access for wt_users" ON public.wt_users;
+CREATE POLICY "Public select access for wt_users" ON public.wt_users FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public insert access for wt_users" ON public.wt_users;
+CREATE POLICY "Public insert access for wt_users" ON public.wt_users FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public update access for wt_users" ON public.wt_users;
+CREATE POLICY "Public update access for wt_users" ON public.wt_users FOR UPDATE USING (true);
+
+-- Permissive RLS Policies for Platforms, Asset Classes, Assets & Snapshots
 DROP POLICY IF EXISTS "Public select access for wt_platforms" ON public.wt_platforms;
 CREATE POLICY "Public select access for wt_platforms" ON public.wt_platforms FOR SELECT USING (true);
 
@@ -115,7 +136,13 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO public.wt_platforms (name) VALUES
     ('Fidelity'),
     ('Coinbase'),
+    ('Allan Gray'),
     ('Binance'),
+    ('Sygnia'),
+    ('Sanlam'),
+    ('Satrix'),
+    ('Easy Equties'),
+    ('Capitec'),
     ('Vanguard'),
     ('Bank of America')
 ON CONFLICT (name) DO NOTHING;

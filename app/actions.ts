@@ -5,6 +5,84 @@ import { Platform, AssetClass, Asset, AssetSnapshot } from '@/lib/types';
 import { DEFAULT_PLATFORMS, DEFAULT_ASSET_CLASSES, DEFAULT_ASSETS, generateDemoSnapshots } from '@/lib/store';
 import { revalidatePath } from 'next/cache';
 
+// Authenticate User against Supabase wt_users
+export async function authenticateUserAction(username: string, passHash: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: users, error } = await supabase
+      .from('wt_users')
+      .select('*')
+      .ilike('username', username.trim());
+
+    if (error) throw error;
+
+    if (!users || users.length === 0) {
+      return { success: false, error: 'User not found. Please register an account first.' };
+    }
+
+    const user = users[0];
+    if (user.password_hash === passHash) {
+      return { success: true };
+    } else {
+      return { success: false, error: 'Incorrect password.' };
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Authentication error' };
+  }
+}
+
+// Register User in Supabase wt_users
+export async function registerUserAction(username: string, passHash: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('wt_users')
+      .insert({
+        username: username.trim(),
+        password_hash: passHash,
+      });
+
+    if (error) {
+      if (error.code === '23505') {
+        return { success: false, error: 'Username already exists. Please login instead.' };
+      }
+      throw error;
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Registration failed' };
+  }
+}
+
+// Change User Password in Supabase wt_users
+export async function changePasswordAction(username: string, currentPassHash: string, newPassHash: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: users, error: selectErr } = await supabase
+      .from('wt_users')
+      .select('*')
+      .ilike('username', username.trim());
+
+    if (selectErr || !users || users.length === 0) {
+      return { success: false, error: 'User not found.' };
+    }
+
+    const user = users[0];
+    if (user.password_hash !== currentPassHash) {
+      return { success: false, error: 'Current password is incorrect.' };
+    }
+
+    const { error: updateErr } = await supabase
+      .from('wt_users')
+      .update({ password_hash: newPassHash, updated_at: new Date().toISOString() })
+      .eq('id', user.id);
+
+    if (updateErr) throw updateErr;
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to update password' };
+  }
+}
+
 // Fetch Platforms
 export async function getPlatforms(): Promise<Platform[]> {
   try {
@@ -221,7 +299,6 @@ export async function seedDemoDataAction(): Promise<{ success: boolean; error?: 
 
     if (!platforms || !classes) throw new Error('Failed to retrieve seeded metadata');
 
-    // Map platforms and classes by name
     const platformMap = new Map(platforms.map((p) => [p.name, p.id]));
     const classMap = new Map(classes.map((c) => [c.name, c.id]));
 

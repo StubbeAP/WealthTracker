@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { authenticateUserAction, registerUserAction, changePasswordAction } from '@/app/actions';
 
 interface PrivacyContextType {
   isPrivacyMode: boolean;
@@ -21,7 +22,6 @@ const USER_STORAGE_KEY = 'wt_auth_username';
 const HASH_STORAGE_KEY = 'wt_auth_pass_hash';
 const PRIVACY_STORAGE_KEY = 'wt_privacy_mode';
 
-// Helper function to generate SHA-256 password hash using Web Crypto API
 export async function hashPassword(password: string): Promise<string> {
   const msgUint8 = new TextEncoder().encode(password + '_wealth_tracker_salt_2026');
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
@@ -33,22 +33,19 @@ export const PrivacyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isPrivacyMode, setIsPrivacyMode] = useState<boolean>(false);
   const [isLocked, setIsLocked] = useState<boolean>(true);
   const [username, setUsername] = useState<string>('admin');
-  const [passHash, setPassHash] = useState<string | null>(null);
-  const [hasAccount, setHasAccount] = useState<boolean>(false);
+  const [hasAccount, setHasAccount] = useState<boolean>(true);
   const [failedAttempts, setFailedAttempts] = useState<number>(0);
   const [lockoutTime, setLockoutTime] = useState<number | null>(null);
 
-  // Initialize Auth state from localStorage
   useEffect(() => {
     const storedUser = localStorage.getItem(USER_STORAGE_KEY);
     const storedHash = localStorage.getItem(HASH_STORAGE_KEY);
 
-    if (storedUser && storedHash) {
+    if (storedUser) {
       setUsername(storedUser);
-      setPassHash(storedHash);
+    }
+    if (storedUser || storedHash) {
       setHasAccount(true);
-    } else {
-      setHasAccount(false);
     }
 
     const storedPrivacy = localStorage.getItem(PRIVACY_STORAGE_KEY);
@@ -67,7 +64,7 @@ export const PrivacyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
         setIsLocked(true);
-      }, 5 * 60 * 1000); // 5 minutes
+      }, 5 * 60 * 1000);
     };
 
     window.addEventListener('mousemove', resetTimer);
@@ -103,21 +100,27 @@ export const PrivacyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return { success: false, error: 'Password must be at least 8 characters long.' };
     }
 
-    const hash = await hashPassword(pass);
+    const passHash = await hashPassword(pass);
+
+    // 1. Save to Supabase wt_users
+    const dbRes = await registerUserAction(user, passHash);
+    if (!dbRes.success) {
+      return dbRes;
+    }
+
+    // 2. Cache locally
     setUsername(user);
-    setPassHash(hash);
     setHasAccount(true);
     setIsLocked(false);
 
     localStorage.setItem(USER_STORAGE_KEY, user);
-    localStorage.setItem(HASH_STORAGE_KEY, hash);
+    localStorage.setItem(HASH_STORAGE_KEY, passHash);
 
     return { success: true };
   }, []);
 
   const login = useCallback(
     async (user: string, pass: string) => {
-      // Check for lockout
       if (lockoutTime && Date.now() < lockoutTime) {
         const remainingSeconds = Math.ceil((lockoutTime - Date.now()) / 1000);
         return {
@@ -126,13 +129,27 @@ export const PrivacyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
       }
 
-      if (!passHash) {
-        return { success: false, error: 'No account setup found. Please register first.' };
-      }
-
       const inputHash = await hashPassword(pass);
 
-      if (user.toLowerCase() === username.toLowerCase() && inputHash === passHash) {
+      // Authenticate against Supabase wt_users
+      const res = await authenticateUserAction(user, inputHash);
+
+      if (res.success) {
+        setUsername(user);
+        setIsLocked(false);
+        setFailedAttempts(0);
+        setLockoutTime(null);
+
+        localStorage.setItem(USER_STORAGE_KEY, user);
+        localStorage.setItem(HASH_STORAGE_KEY, inputHash);
+        return { success: true };
+      }
+
+      // Check local fallback hash if Supabase user table hasn't been created yet
+      const localHash = localStorage.getItem(HASH_STORAGE_KEY);
+      const localUser = localStorage.getItem(USER_STORAGE_KEY);
+      if (localHash && localHash === inputHash && localUser?.toLowerCase() === user.toLowerCase()) {
+        setUsername(user);
         setIsLocked(false);
         setFailedAttempts(0);
         setLockoutTime(null);
@@ -143,38 +160,47 @@ export const PrivacyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setFailedAttempts(newAttempts);
 
       if (newAttempts >= 5) {
-        const lockUntil = Date.now() + 60 * 1000; // 60 seconds lockout
+        const lockUntil = Date.now() + 60 * 1000;
         setLockoutTime(lockUntil);
         return {
           success: false,
-          error: 'Too many invalid attempts. Brute force lock activated for 60 seconds.',
+          error: 'Too many invalid attempts. Account locked for 60 seconds.',
         };
       }
 
       return {
         success: false,
-        error: `Invalid credentials. (${5 - newAttempts} attempts remaining)`,
+        error: res.error || `Invalid credentials. (${5 - newAttempts} attempts remaining)`,
       };
     },
-    [username, passHash, failedAttempts, lockoutTime]
+    [failedAttempts, lockoutTime]
   );
 
   const changePassword = useCallback(
     async (currentPass: string, newPass: string) => {
-      const currentHash = await hashPassword(currentPass);
-      if (currentHash !== passHash) {
-        return { success: false, error: 'Current password is incorrect.' };
-      }
       if (newPass.length < 8) {
         return { success: false, error: 'New password must be at least 8 characters long.' };
       }
 
+      const currentHash = await hashPassword(currentPass);
       const newHash = await hashPassword(newPass);
-      setPassHash(newHash);
-      localStorage.setItem(HASH_STORAGE_KEY, newHash);
-      return { success: true };
+
+      const res = await changePasswordAction(username, currentHash, newHash);
+      if (res.success) {
+        localStorage.setItem(HASH_STORAGE_KEY, newHash);
+        return { success: true };
+      }
+
+      // Fallback local update
+      const localHash = localStorage.getItem(HASH_STORAGE_KEY);
+      if (localHash === currentHash) {
+        localStorage.setItem(HASH_STORAGE_KEY, newHash);
+        return { success: true };
+      }
+
+      return res;
     },
-    [passHash]
+    [username]
   );
 
   const formatCurrency = useCallback(
