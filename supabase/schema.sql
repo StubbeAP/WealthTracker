@@ -1,5 +1,5 @@
 -- ============================================================================
--- WEALTH TRACKER DATABASE SCHEMA MIGRATION (HARDENED SECURITY + 2FA)
+-- WEALTH TRACKER DATABASE SCHEMA MIGRATION (ASSETS, LIABILITIES & NET WORTH)
 -- Target Database: Supabase PostgreSQL (vgsfkoligrwknmvughly)
 -- ============================================================================
 
@@ -35,12 +35,21 @@ CREATE TABLE IF NOT EXISTS public.wt_platforms (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Asset Classes Table
+-- 2. Asset Classes Table (Assets vs Liabilities)
 CREATE TABLE IF NOT EXISTS public.wt_asset_classes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL UNIQUE,
+    type TEXT NOT NULL DEFAULT 'ASSET',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add column if missing
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wt_asset_classes' AND column_name='type') THEN
+        ALTER TABLE public.wt_asset_classes ADD COLUMN type TEXT NOT NULL DEFAULT 'ASSET';
+    END IF;
+END $$;
 
 -- 3. Assets Table
 CREATE TABLE IF NOT EXISTS public.wt_assets (
@@ -77,7 +86,7 @@ ALTER TABLE public.wt_asset_classes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wt_assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wt_asset_snapshots ENABLE ROW LEVEL SECURITY;
 
--- Hardened RLS Policies for wt_users
+-- RLS Policies
 DROP POLICY IF EXISTS "Public select access for wt_users" ON public.wt_users;
 CREATE POLICY "Public select access for wt_users" ON public.wt_users FOR SELECT USING (true);
 
@@ -87,7 +96,6 @@ CREATE POLICY "Public insert access for wt_users" ON public.wt_users FOR INSERT 
 DROP POLICY IF EXISTS "Public update access for wt_users" ON public.wt_users;
 CREATE POLICY "Public update access for wt_users" ON public.wt_users FOR UPDATE USING (true);
 
--- RLS Policies for Platforms, Asset Classes, Assets & Snapshots
 DROP POLICY IF EXISTS "Public select access for wt_platforms" ON public.wt_platforms;
 CREATE POLICY "Public select access for wt_platforms" ON public.wt_platforms FOR SELECT USING (true);
 
@@ -136,14 +144,18 @@ CREATE POLICY "Public update access for wt_asset_snapshots" ON public.wt_asset_s
 DROP POLICY IF EXISTS "Public delete access for wt_asset_snapshots" ON public.wt_asset_snapshots;
 CREATE POLICY "Public delete access for wt_asset_snapshots" ON public.wt_asset_snapshots FOR DELETE USING (true);
 
--- Insert Default Asset Classes
-INSERT INTO public.wt_asset_classes (name) VALUES
-    ('Equities'),
-    ('Crypto'),
-    ('Cash & Equivalents'),
-    ('Real Estate'),
-    ('Fixed Income')
-ON CONFLICT (name) DO NOTHING;
+-- Insert Default Asset & Liability Classes
+INSERT INTO public.wt_asset_classes (name, type) VALUES
+    ('Equities', 'ASSET'),
+    ('Crypto', 'ASSET'),
+    ('Cash & Savings', 'ASSET'),
+    ('Real Estate', 'ASSET'),
+    ('Fixed Income', 'ASSET'),
+    ('Credit Cards', 'LIABILITY'),
+    ('Personal Loans', 'LIABILITY'),
+    ('Mortgages', 'LIABILITY'),
+    ('Vehicle Financing', 'LIABILITY')
+ON CONFLICT (name) DO UPDATE SET type = EXCLUDED.type;
 
 -- Insert Default Platforms
 INSERT INTO public.wt_platforms (name) VALUES
@@ -156,6 +168,7 @@ INSERT INTO public.wt_platforms (name) VALUES
     ('Satrix'),
     ('Easy Equties'),
     ('Capitec'),
+    ('SA Home Loans'),
     ('Vanguard'),
     ('Bank of America')
 ON CONFLICT (name) DO NOTHING;
@@ -171,6 +184,7 @@ RETURNS TABLE (
     asset_name TEXT,
     platform_name TEXT,
     asset_class_name TEXT,
+    class_type TEXT,
     currency VARCHAR(3),
     current_value NUMERIC(15, 2),
     as_of_date DATE,
@@ -236,6 +250,7 @@ BEGIN
         a.name AS asset_name,
         p.name AS platform_name,
         ac.name AS asset_class_name,
+        ac.type AS class_type,
         a.currency,
         COALESCE(curr.val, 0) AS current_value,
         curr.s_date AS as_of_date,

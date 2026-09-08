@@ -254,11 +254,11 @@ export async function createPlatform(name: string): Promise<{ success: boolean; 
 }
 
 // Create Asset Class
-export async function createAssetClass(name: string): Promise<{ success: boolean; error?: string }> {
+export async function createAssetClass(name: string, type: 'ASSET' | 'LIABILITY' = 'ASSET'): Promise<{ success: boolean; error?: string }> {
   try {
     const { error } = await supabase
       .from('wt_asset_classes')
-      .insert({ name });
+      .insert({ name: name.trim(), type });
 
     if (error) throw error;
     revalidatePath('/');

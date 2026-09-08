@@ -203,7 +203,18 @@ export function BulkEntryGrid({ assets, snapshots, platforms }: BulkEntryGridPro
                     className="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-900/40 transition-colors"
                   >
                     <div className="sm:w-1/3">
-                      <div className="font-semibold text-sm text-white">{asset.name}</div>
+                      <div className="font-semibold text-sm text-white flex items-center gap-2">
+                        {asset.name}
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono ${
+                            asset.asset_class?.type === 'LIABILITY'
+                              ? 'bg-rose-950/90 text-rose-400 border border-rose-800'
+                              : 'bg-emerald-950/90 text-emerald-400 border border-emerald-800'
+                          }`}
+                        >
+                          {asset.asset_class?.type === 'LIABILITY' ? 'LIABILITY' : 'ASSET'}
+                        </span>
+                      </div>
                       <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
                         <span>{asset.asset_class?.name || 'Class'}</span>
                         <span className="text-slate-600">•</span>

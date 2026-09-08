@@ -19,6 +19,7 @@ export function AssetManager({ platforms, assetClasses, assets }: AssetManagerPr
   // Form states
   const [newPlatformName, setNewPlatformName] = useState('');
   const [newClassName, setNewClassName] = useState('');
+  const [newClassType, setNewClassType] = useState<'ASSET' | 'LIABILITY'>('ASSET');
   const [newAssetName, setNewAssetName] = useState('');
   const [selectedPlatformId, setSelectedPlatformId] = useState(platforms[0]?.id || '');
   const [selectedClassId, setSelectedClassId] = useState(assetClasses[0]?.id || '');
@@ -46,10 +47,10 @@ export function AssetManager({ platforms, assetClasses, assets }: AssetManagerPr
     if (!newClassName.trim()) return;
 
     startTransition(async () => {
-      const res = await createAssetClass(newClassName.trim());
+      const res = await createAssetClass(newClassName.trim(), newClassType);
       if (res.success) {
         setNewClassName('');
-        setStatusMessage({ type: 'success', text: 'Asset class created successfully!' });
+        setStatusMessage({ type: 'success', text: `${newClassType === 'LIABILITY' ? 'Liability' : 'Asset'} class created successfully!` });
         setTimeout(() => setStatusMessage(null), 3000);
       } else {
         setStatusMessage({ type: 'error', text: res.error || 'Failed to create asset class' });
@@ -308,36 +309,60 @@ export function AssetManager({ platforms, assetClasses, assets }: AssetManagerPr
           <div className="glass-card p-6 rounded-2xl lg:col-span-1 h-fit">
             <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
               <Plus className="w-4 h-4 text-blue-400" />
-              Add Asset Class
+              Add Class / Category
             </h2>
             <form onSubmit={handleAddClass} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Asset Class Name</label>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Class Name</label>
                 <input
                   type="text"
-                  placeholder="e.g. Commodities, Private Equity"
+                  placeholder="e.g. Credit Cards, Equities, Crypto"
                   value={newClassName}
                   onChange={(e) => setNewClassName(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-blue-500"
                   required
                 />
               </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Category Type</label>
+                <select
+                  value={newClassType}
+                  onChange={(e) => setNewClassType(e.target.value as 'ASSET' | 'LIABILITY')}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="ASSET">Asset (Adds to Net Worth)</option>
+                  <option value="LIABILITY">Liability (Subtracts from Net Worth)</option>
+                </select>
+              </div>
+
               <button
                 type="submit"
                 disabled={isPending}
                 className="w-full py-2.5 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-500 transition-colors disabled:opacity-50"
               >
-                {isPending ? 'Saving...' : 'Add Asset Class'}
+                {isPending ? 'Saving...' : 'Add Class'}
               </button>
             </form>
           </div>
 
           <div className="glass-card p-6 rounded-2xl lg:col-span-2">
-            <h2 className="text-sm font-bold text-white mb-4">Asset Classes ({assetClasses.length})</h2>
+            <h2 className="text-sm font-bold text-white mb-4">Classes & Categories ({assetClasses.length})</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {assetClasses.map((c) => (
                 <div key={c.id} className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between">
-                  <span className="font-semibold text-sm text-slate-200">{c.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm text-slate-200">{c.name}</span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono ${
+                        c.type === 'LIABILITY'
+                          ? 'bg-rose-950/90 text-rose-400 border border-rose-800'
+                          : 'bg-emerald-950/90 text-emerald-400 border border-emerald-800'
+                      }`}
+                    >
+                      {c.type === 'LIABILITY' ? 'LIABILITY' : 'ASSET'}
+                    </span>
+                  </div>
                   <span className="text-[10px] font-mono text-slate-500">ID: {c.id.slice(0, 8)}</span>
                 </div>
               ))}

@@ -1,7 +1,7 @@
 'use client';
 
 import { Timeframe, PortfolioSummary } from '@/lib/types';
-import { TrendingUp, TrendingDown, DollarSign, Layers, PieChart, Calendar, Eye, EyeOff } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Layers, PieChart, Calendar, Eye, EyeOff, ShieldAlert, Wallet } from 'lucide-react';
 import { usePrivacy } from '@/context/privacy-context';
 
 interface HeroCardsProps {
@@ -23,7 +23,7 @@ export function HeroCards({ summary, selectedTimeframe, onTimeframeChange }: Her
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
-            Portfolio Overview
+            Net Worth Overview
             <button
               onClick={togglePrivacyMode}
               title="Toggle Privacy Blur"
@@ -33,7 +33,7 @@ export function HeroCards({ summary, selectedTimeframe, onTimeframeChange }: Her
             </button>
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Real-time balance metrics and rolling performance calculation engine (ZAR)
+            True Net Worth = Total Assets - Total Liabilities (ZAR)
           </p>
         </div>
 
@@ -73,13 +73,41 @@ export function HeroCards({ summary, selectedTimeframe, onTimeframeChange }: Her
           <div className="text-2xl sm:text-3xl font-extrabold text-white font-mono tracking-tight">
             {formatCurrency(summary.total_net_worth)}
           </div>
-          <div className="mt-3 flex items-center gap-2 text-xs">
-            <span className="text-slate-400">Current Valuation</span>
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+            <span>Assets minus Liabilities</span>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
           </div>
         </div>
 
-        {/* Card 2: Nominal Gain / Loss */}
+        {/* Card 2: Assets vs Liabilities Breakdown */}
+        <div className="glass-card glass-card-hover p-5 rounded-2xl relative overflow-hidden">
+          <div className="flex items-center justify-between text-slate-400 mb-3">
+            <span className="text-xs font-semibold uppercase tracking-wider">Assets vs Liabilities</span>
+            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              <Wallet className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-emerald-400 font-bold">Assets:</span>
+              <span className="text-white font-extrabold">{formatCurrency(summary.total_assets)}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-rose-400 font-bold">Liabilities:</span>
+              <span className="text-rose-300 font-extrabold">{formatCurrency(summary.total_liabilities)}</span>
+            </div>
+          </div>
+          <div className="mt-3 text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800/80">
+            <span>Equity Ratio</span>
+            <span className="font-mono text-slate-300">
+              {summary.total_assets > 0
+                ? `${(((summary.total_assets - summary.total_liabilities) / summary.total_assets) * 100).toFixed(0)}%`
+                : '0%'}
+            </span>
+          </div>
+        </div>
+
+        {/* Card 3: Nominal Net Worth Gain / Loss */}
         <div className="glass-card glass-card-hover p-5 rounded-2xl relative overflow-hidden">
           <div className="flex items-center justify-between text-slate-400 mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider">{selectedTimeframe} Change (R)</span>
@@ -93,33 +121,14 @@ export function HeroCards({ summary, selectedTimeframe, onTimeframeChange }: Her
               : '—'}
           </div>
           <div className="mt-3 text-xs text-slate-400 flex items-center justify-between">
-            <span>Benchmark Lookback</span>
-            <span className="font-mono text-slate-300">
-              {summary.previous_value !== null ? formatCurrency(summary.previous_value) : 'No past data'}
+            <span>{selectedTimeframe} Growth (%)</span>
+            <span className={`font-mono font-bold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {summary.percentage_change !== null ? `${isPositive ? '+' : ''}${summary.percentage_change.toFixed(2)}%` : '—'}
             </span>
           </div>
         </div>
 
-        {/* Card 3: Percentage Growth */}
-        <div className="glass-card glass-card-hover p-5 rounded-2xl relative overflow-hidden">
-          <div className="flex items-center justify-between text-slate-400 mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider">{selectedTimeframe} Growth (%)</span>
-            <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
-              <PieChart className="w-4 h-4" />
-            </div>
-          </div>
-          <div className={`text-2xl sm:text-3xl font-extrabold font-mono tracking-tight ${hasLookback ? (isPositive ? 'text-emerald-400' : 'text-rose-400') : 'text-slate-400'}`}>
-            {hasLookback
-              ? `${isPositive ? '+' : ''}${summary.percentage_change?.toFixed(2)}%`
-              : '—'}
-          </div>
-          <div className="mt-3 text-xs text-slate-400 flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-            <span>Rolling window lookback</span>
-          </div>
-        </div>
-
-        {/* Card 4: Assets & Platforms */}
+        {/* Card 4: Portfolio Structure */}
         <div className="glass-card glass-card-hover p-5 rounded-2xl relative overflow-hidden">
           <div className="flex items-center justify-between text-slate-400 mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider">Portfolio Structure</span>
@@ -128,12 +137,13 @@ export function HeroCards({ summary, selectedTimeframe, onTimeframeChange }: Her
             </div>
           </div>
           <div className="flex items-baseline gap-3">
-            <span className="text-2xl sm:text-3xl font-extrabold text-white font-mono">{summary.asset_count}</span>
-            <span className="text-xs text-slate-400">Active Assets</span>
+            <span className="text-2xl sm:text-3xl font-extrabold text-white font-mono">{summary.asset_count + summary.liability_count}</span>
+            <span className="text-xs text-slate-400">Total Accounts</span>
           </div>
           <div className="mt-3 text-xs text-slate-400 flex items-center justify-between">
-            <span>Platforms Tracked</span>
-            <span className="font-mono font-bold text-cyan-400">{summary.platform_count}</span>
+            <span className="text-emerald-400">{summary.asset_count} Assets</span>
+            <span className="text-slate-600">•</span>
+            <span className="text-rose-400">{summary.liability_count} Liabilities</span>
           </div>
         </div>
 

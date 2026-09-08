@@ -80,21 +80,39 @@ export function AllocationCharts({ performances, snapshots }: AllocationChartsPr
   }, [performances]);
 
   const historicalTimeline = useMemo(() => {
-    const dateMap = new Map<string, number>();
+    const dates = Array.from(new Set(snapshots.map((s) => s.snapshot_date))).sort(
+      (a, b) => new Date(a).getTime() - new Date(b).getTime()
+    );
 
-    snapshots.forEach((s) => {
-      const date = s.snapshot_date;
-      dateMap.set(date, (dateMap.get(date) || 0) + Number(s.value));
+    return dates.map((dateStr) => {
+      let totalAssets = 0;
+      let totalLiabilities = 0;
+
+      performances.forEach((perf) => {
+        const assetSnapshots = snapshots
+          .filter((s) => s.asset_id === perf.asset_id && new Date(s.snapshot_date) <= new Date(dateStr))
+          .sort((a, b) => new Date(a.snapshot_date).getTime() - new Date(b.snapshot_date).getTime());
+
+        if (assetSnapshots.length > 0) {
+          const latestVal = Number(assetSnapshots[assetSnapshots.length - 1].value);
+          if (perf.type === 'LIABILITY') {
+            totalLiabilities += latestVal;
+          } else {
+            totalAssets += latestVal;
+          }
+        }
+      });
+
+      const netWorth = totalAssets - totalLiabilities;
+      return {
+        date: new Date(dateStr).toLocaleDateString('en-ZA', { month: 'short', year: '2-digit' }),
+        fullDate: dateStr,
+        total_value: netWorth,
+        total_assets: totalAssets,
+        total_liabilities: totalLiabilities,
+      };
     });
-
-    return Array.from(dateMap.entries())
-      .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
-      .map(([date, total_value]) => ({
-        date: new Date(date).toLocaleDateString('en-ZA', { month: 'short', year: '2-digit' }),
-        fullDate: date,
-        total_value,
-      }));
-  }, [snapshots]);
+  }, [snapshots, performances]);
 
   const renderTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -103,10 +121,16 @@ export function AllocationCharts({ performances, snapshots }: AllocationChartsPr
         <div className="bg-slate-900 border border-slate-700/80 p-3 rounded-xl shadow-xl text-xs font-sans">
           <div className="font-bold text-white mb-1">{data.name || data.date || data.fullDate}</div>
           <div className="font-mono text-emerald-400 font-semibold">
-            R {(data.value || data.total_value)?.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}
+            R {(data.value ?? data.total_value)?.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}
           </div>
+          {data.total_assets !== undefined && (
+            <div className="mt-1.5 pt-1.5 border-t border-slate-800 space-y-0.5 font-mono text-[11px]">
+              <div className="text-emerald-400">Assets: R {data.total_assets.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}</div>
+              <div className="text-rose-400">Liabilities: R {data.total_liabilities.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}</div>
+            </div>
+          )}
           {data.percentage !== undefined && (
-            <div className="text-slate-400 mt-0.5">{data.percentage.toFixed(1)}% of portfolio</div>
+            <div className="text-slate-400 mt-0.5">{data.percentage.toFixed(1)}% of total</div>
           )}
         </div>
       );

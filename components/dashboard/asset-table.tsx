@@ -15,10 +15,10 @@ export function AssetTable({ performances, selectedTimeframe }: AssetTableProps)
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState<string>('ALL');
   const [selectedClass, setSelectedClass] = useState<string>('ALL');
+  const [selectedType, setSelectedType] = useState<'ALL' | 'ASSET' | 'LIABILITY'>('ALL');
   const [sortField, setSortField] = useState<'name' | 'value' | 'selected_pct'>('value');
   const [sortAsc, setSortAsc] = useState(false);
 
-  // Extract unique platforms & classes for filter options
   const platforms = useMemo(
     () => Array.from(new Set(performances.map((p) => p.platform_name))).sort(),
     [performances]
@@ -28,7 +28,6 @@ export function AssetTable({ performances, selectedTimeframe }: AssetTableProps)
     [performances]
   );
 
-  // Filter and sort asset performances
   const filteredAssets = useMemo(() => {
     return performances
       .filter((p) => {
@@ -38,7 +37,8 @@ export function AssetTable({ performances, selectedTimeframe }: AssetTableProps)
           p.asset_class_name.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesPlatform = selectedPlatform === 'ALL' || p.platform_name === selectedPlatform;
         const matchesClass = selectedClass === 'ALL' || p.asset_class_name === selectedClass;
-        return matchesSearch && matchesPlatform && matchesClass;
+        const matchesType = selectedType === 'ALL' || p.type === selectedType;
+        return matchesSearch && matchesPlatform && matchesClass && matchesType;
       })
       .sort((a, b) => {
         let valA: any = a.current_value;
@@ -56,7 +56,7 @@ export function AssetTable({ performances, selectedTimeframe }: AssetTableProps)
         if (valA > valB) return sortAsc ? 1 : -1;
         return 0;
       });
-  }, [performances, searchTerm, selectedPlatform, selectedClass, sortField, sortAsc, selectedTimeframe]);
+  }, [performances, searchTerm, selectedPlatform, selectedClass, selectedType, sortField, sortAsc, selectedTimeframe]);
 
   const handleSort = (field: 'name' | 'value' | 'selected_pct') => {
     if (sortField === field) {
@@ -86,54 +86,58 @@ export function AssetTable({ performances, selectedTimeframe }: AssetTableProps)
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            Asset Growth & Performance Grid
+            Assets & Liabilities Breakdown
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Detailed asset breakdown with rolling 3M, 6M, 1Y, 3Y, and 5Y growth calculations
+            Individual asset valuations and liability balance progression
           </p>
         </div>
 
         {/* Search & Filter Controls */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Type Filter Buttons */}
+          <div className="flex items-center p-1 rounded-xl bg-slate-900 border border-slate-800">
+            {(['ALL', 'ASSET', 'LIABILITY'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setSelectedType(t)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                  selectedType === t
+                    ? t === 'LIABILITY'
+                      ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                      : t === 'ASSET'
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                      : 'bg-blue-600 text-white'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {t === 'ALL' ? 'All Accounts' : t === 'ASSET' ? 'Assets Only' : 'Liabilities Only'}
+              </button>
+            ))}
+          </div>
+
           {/* Search Bar */}
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
-              placeholder="Search asset..."
+              placeholder="Search account..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-3 py-1.5 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 w-40 sm:w-48"
+              className="pl-9 pr-3 py-1.5 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 w-36 sm:w-44"
             />
           </div>
 
           {/* Platform Filter */}
-          <div className="flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-slate-400 hidden sm:inline" />
-            <select
-              value={selectedPlatform}
-              onChange={(e) => setSelectedPlatform(e.target.value)}
-              className="py-1.5 px-2.5 text-xs rounded-xl bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
-            >
-              <option value="ALL">All Platforms</option>
-              {platforms.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Asset Class Filter */}
           <select
-            value={selectedClass}
-            onChange={(e) => setSelectedClass(e.target.value)}
+            value={selectedPlatform}
+            onChange={(e) => setSelectedPlatform(e.target.value)}
             className="py-1.5 px-2.5 text-xs rounded-xl bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
           >
-            <option value="ALL">All Asset Classes</option>
-            {classes.map((c) => (
-              <option key={c} value={c}>
-                {c}
+            <option value="ALL">All Platforms</option>
+            {platforms.map((p) => (
+              <option key={p} value={p}>
+                {p}
               </option>
             ))}
           </select>
@@ -150,17 +154,17 @@ export function AssetTable({ performances, selectedTimeframe }: AssetTableProps)
                   onClick={() => handleSort('name')}
                   className="flex items-center gap-1 hover:text-white transition-colors"
                 >
-                  Asset & Platform
+                  Account Name & Platform
                   <ArrowUpDown className="w-3 h-3" />
                 </button>
               </th>
-              <th className="py-3 px-4">Class</th>
+              <th className="py-3 px-4">Type & Class</th>
               <th className="py-3 px-4 text-right">
                 <button
                   onClick={() => handleSort('value')}
                   className="flex items-center gap-1 ml-auto hover:text-white transition-colors"
                 >
-                  Current Value
+                  Current Balance
                   <ArrowUpDown className="w-3 h-3" />
                 </button>
               </th>
@@ -175,11 +179,12 @@ export function AssetTable({ performances, selectedTimeframe }: AssetTableProps)
             {filteredAssets.length === 0 ? (
               <tr>
                 <td colSpan={8} className="py-8 text-center text-slate-500">
-                  No matching assets found.
+                  No matching accounts found.
                 </td>
               </tr>
             ) : (
               filteredAssets.map((asset) => {
+                const isLiability = asset.type === 'LIABILITY';
                 return (
                   <tr
                     key={asset.asset_id}
@@ -197,15 +202,20 @@ export function AssetTable({ performances, selectedTimeframe }: AssetTableProps)
                       </div>
                     </td>
 
-                    {/* Class */}
+                    {/* Type & Class */}
                     <td className="py-3.5 px-4">
-                      <span className="px-2 py-0.5 rounded-md bg-blue-950/80 text-blue-300 border border-blue-800/40 text-[11px]">
-                        {asset.asset_class_name}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${isLiability ? 'bg-rose-950 text-rose-400 border border-rose-800' : 'bg-emerald-950 text-emerald-400 border border-emerald-800'}`}>
+                          {isLiability ? 'LIABILITY' : 'ASSET'}
+                        </span>
+                        <span className="text-slate-400 text-[11px]">
+                          {asset.asset_class_name}
+                        </span>
+                      </div>
                     </td>
 
-                    {/* Current Value */}
-                    <td className="py-3.5 px-4 text-right font-mono font-bold text-white text-sm">
+                    {/* Current Balance */}
+                    <td className={`py-3.5 px-4 text-right font-mono font-bold text-sm ${isLiability ? 'text-rose-400' : 'text-white'}`}>
                       {formatCurrency(asset.current_value)}
                     </td>
 

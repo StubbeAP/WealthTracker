@@ -21,12 +21,15 @@ export function calculateAssetPerformance(
     .filter((s) => s.asset_id === asset.id && new Date(s.snapshot_date) <= refDate)
     .sort((a, b) => new Date(a.snapshot_date).getTime() - new Date(b.snapshot_date).getTime());
 
+  const isLiability = assetClass?.type === 'LIABILITY';
+
   if (sortedSnapshots.length === 0) {
     return {
       asset_id: asset.id,
       asset_name: asset.name,
       platform_name: platform?.name || 'Unknown',
       asset_class_name: assetClass?.name || 'Unclassified',
+      type: assetClass?.type || 'ASSET',
       currency: asset.currency || 'ZAR',
       current_value: 0,
       current_date: null,
@@ -44,11 +47,11 @@ export function calculateAssetPerformance(
   const currentValue = Number(latestSnapshot.value);
 
   const metrics: Record<Timeframe, LookbackMetric> = {
-    '3M': calculateLookback(sortedSnapshots, currentValue, refDate, TIMEFRAME_DAYS['3M']),
-    '6M': calculateLookback(sortedSnapshots, currentValue, refDate, TIMEFRAME_DAYS['6M']),
-    '1Y': calculateLookback(sortedSnapshots, currentValue, refDate, TIMEFRAME_DAYS['1Y']),
-    '3Y': calculateLookback(sortedSnapshots, currentValue, refDate, TIMEFRAME_DAYS['3Y']),
-    '5Y': calculateLookback(sortedSnapshots, currentValue, refDate, TIMEFRAME_DAYS['5Y']),
+    '3M': calculateLookback(sortedSnapshots, currentValue, refDate, TIMEFRAME_DAYS['3M'], isLiability),
+    '6M': calculateLookback(sortedSnapshots, currentValue, refDate, TIMEFRAME_DAYS['6M'], isLiability),
+    '1Y': calculateLookback(sortedSnapshots, currentValue, refDate, TIMEFRAME_DAYS['1Y'], isLiability),
+    '3Y': calculateLookback(sortedSnapshots, currentValue, refDate, TIMEFRAME_DAYS['3Y'], isLiability),
+    '5Y': calculateLookback(sortedSnapshots, currentValue, refDate, TIMEFRAME_DAYS['5Y'], isLiability),
   };
 
   return {
@@ -56,6 +59,7 @@ export function calculateAssetPerformance(
     asset_name: asset.name,
     platform_name: platform?.name || 'Unknown',
     asset_class_name: assetClass?.name || 'Unclassified',
+    type: assetClass?.type || 'ASSET',
     currency: asset.currency || 'ZAR',
     current_value: currentValue,
     current_date: latestSnapshot.snapshot_date,
@@ -67,7 +71,8 @@ function calculateLookback(
   snapshots: AssetSnapshot[],
   currentValue: number,
   refDate: Date,
-  days: number
+  days: number,
+  isLiability: boolean = false
 ): LookbackMetric {
   const targetTime = refDate.getTime() - days * 24 * 60 * 60 * 1000;
 
@@ -82,7 +87,9 @@ function calculateLookback(
   const closestPast = pastSnapshots[pastSnapshots.length - 1];
   const pastValue = Number(closestPast.value);
 
-  const gain = currentValue - pastValue;
+  // For assets: current - past. For liabilities: paying down debt is a gain for net worth!
+  const rawDiff = currentValue - pastValue;
+  const gain = isLiability ? -rawDiff : rawDiff;
   const percentage = pastValue > 0 ? (gain / pastValue) * 100 : 0;
 
   return {
@@ -96,41 +103,63 @@ export function calculatePortfolioSummary(
   performances: AssetPerformance[],
   timeframe: Timeframe
 ): PortfolioSummary {
-  const totalNetWorth = performances.reduce((acc, p) => acc + p.current_value, 0);
-  
-  let previousTotal: number | null = 0;
+  const assetPerfs = performances.filter((p) => p.type === 'ASSET');
+  const liabilityPerfs = performances.filter((p) => p.type === 'LIABILITY');
+
+  const totalAssets = assetPerfs.reduce((acc, p) => acc + p.current_value, 0);
+  const totalLiabilities = liabilityPerfs.reduce((acc, p) => acc + p.current_value, 0);
+  const totalNetWorth = totalAssets - totalLiabilities;
+
+  let previousAssets: number | null = 0;
+  let previousLiabilities: number | null = 0;
   let hasValidLookback = false;
 
-  for (const perf of performances) {
+  for (const perf of assetPerfs) {
     const metric = perf.metrics[timeframe];
     if (metric.past_value !== null) {
-      previousTotal! += metric.past_value;
+      previousAssets! += metric.past_value;
       hasValidLookback = true;
     }
   }
 
-  if (!hasValidLookback || previousTotal === null) {
+  for (const perf of liabilityPerfs) {
+    const metric = perf.metrics[timeframe];
+    if (metric.past_value !== null) {
+      previousLiabilities! += metric.past_value;
+      hasValidLookback = true;
+    }
+  }
+
+  const previousNetWorth = previousAssets - previousLiabilities;
+
+  if (!hasValidLookback) {
     return {
       total_net_worth: totalNetWorth,
+      total_assets: totalAssets,
+      total_liabilities: totalLiabilities,
       timeframe,
       previous_value: null,
       absolute_change: null,
       percentage_change: null,
-      asset_count: performances.length,
+      asset_count: assetPerfs.length,
+      liability_count: liabilityPerfs.length,
       platform_count: new Set(performances.map((p) => p.platform_name)).size,
     };
   }
 
-  const absoluteChange = totalNetWorth - previousTotal;
-  const percentageChange = previousTotal > 0 ? (absoluteChange / previousTotal) * 100 : 0;
+  const absoluteChange = totalNetWorth - previousNetWorth;
+  const percentageChange = previousNetWorth > 0 ? (absoluteChange / previousNetWorth) * 100 : 0;
 
   return {
     total_net_worth: totalNetWorth,
+    total_assets: totalAssets,
+    total_liabilities: totalLiabilities,
     timeframe,
-    previous_value: Math.round(previousTotal * 100) / 100,
+    previous_value: Math.round(previousNetWorth * 100) / 100,
     absolute_change: Math.round(absoluteChange * 100) / 100,
     percentage_change: Math.round(percentageChange * 100) / 100,
-    asset_count: performances.length,
+    asset_count: assetPerfs.length,
+    liability_count: liabilityPerfs.length,
     platform_count: new Set(performances.map((p) => p.platform_name)).size,
   };
 }

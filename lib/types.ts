@@ -1,4 +1,5 @@
 export type Timeframe = '3M' | '6M' | '1Y' | '3Y' | '5Y';
+export type ClassType = 'ASSET' | 'LIABILITY';
 
 export interface Platform {
   id: string;
@@ -9,6 +10,7 @@ export interface Platform {
 export interface AssetClass {
   id: string;
   name: string;
+  type: ClassType;
   created_at?: string;
 }
 
@@ -44,6 +46,7 @@ export interface AssetPerformance {
   asset_name: string;
   platform_name: string;
   asset_class_name: string;
+  type: ClassType;
   currency: string;
   current_value: number;
   current_date: string | null;
@@ -52,11 +55,14 @@ export interface AssetPerformance {
 
 export interface PortfolioSummary {
   total_net_worth: number;
+  total_assets: number;
+  total_liabilities: number;
   timeframe: Timeframe;
   previous_value: number | null;
   absolute_change: number | null;
   percentage_change: number | null;
   asset_count: number;
+  liability_count: number;
   platform_count: number;
 }
 
@@ -70,5 +76,7 @@ export interface AllocationItem {
 export interface HistoricalPoint {
   date: string;
   total_value: number;
-  [key: string]: string | number; // Breakdown by asset or class if needed
+  total_assets?: number;
+  total_liabilities?: number;
+  [key: string]: string | number | undefined;
 }
