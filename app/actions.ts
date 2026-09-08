@@ -260,7 +260,16 @@ export async function createAssetClass(name: string, type: 'ASSET' | 'LIABILITY'
       .from('wt_asset_classes')
       .insert({ name: name.trim(), type });
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST204' || error.code === 'PGRST205' || error.message.includes('type')) {
+        const { error: fallbackErr } = await supabase
+          .from('wt_asset_classes')
+          .insert({ name: name.trim() });
+        if (fallbackErr) throw fallbackErr;
+      } else {
+        throw error;
+      }
+    }
     revalidatePath('/');
     revalidatePath('/assets');
     return { success: true };
