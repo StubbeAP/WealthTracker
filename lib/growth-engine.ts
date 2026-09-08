@@ -8,9 +8,6 @@ export const TIMEFRAME_DAYS: Record<Timeframe, number> = {
   '5Y': 1825,
 };
 
-/**
- * Calculates growth metrics for a given asset given its full snapshot history.
- */
 export function calculateAssetPerformance(
   asset: Asset,
   platform: Platform | undefined,
@@ -20,7 +17,6 @@ export function calculateAssetPerformance(
 ): AssetPerformance {
   const refDate = refDateStr ? new Date(refDateStr) : new Date();
 
-  // Sort snapshots ascending by date
   const sortedSnapshots = [...snapshots]
     .filter((s) => s.asset_id === asset.id && new Date(s.snapshot_date) <= refDate)
     .sort((a, b) => new Date(a.snapshot_date).getTime() - new Date(b.snapshot_date).getTime());
@@ -31,7 +27,7 @@ export function calculateAssetPerformance(
       asset_name: asset.name,
       platform_name: platform?.name || 'Unknown',
       asset_class_name: assetClass?.name || 'Unclassified',
-      currency: asset.currency || 'USD',
+      currency: asset.currency || 'ZAR',
       current_value: 0,
       current_date: null,
       metrics: {
@@ -60,16 +56,13 @@ export function calculateAssetPerformance(
     asset_name: asset.name,
     platform_name: platform?.name || 'Unknown',
     asset_class_name: assetClass?.name || 'Unclassified',
-    currency: asset.currency || 'USD',
+    currency: asset.currency || 'ZAR',
     current_value: currentValue,
     current_date: latestSnapshot.snapshot_date,
     metrics,
   };
 }
 
-/**
- * Finds the closest snapshot on or before target date (refDate - lookbackDays)
- */
 function calculateLookback(
   snapshots: AssetSnapshot[],
   currentValue: number,
@@ -78,7 +71,6 @@ function calculateLookback(
 ): LookbackMetric {
   const targetTime = refDate.getTime() - days * 24 * 60 * 60 * 1000;
 
-  // Filter snapshots on or before the target date
   const pastSnapshots = snapshots.filter(
     (s) => new Date(s.snapshot_date).getTime() <= targetTime
   );
@@ -87,7 +79,6 @@ function calculateLookback(
     return { past_value: null, gain: null, percentage: null };
   }
 
-  // The last element in pastSnapshots is the closest on or before target date
   const closestPast = pastSnapshots[pastSnapshots.length - 1];
   const pastValue = Number(closestPast.value);
 
@@ -101,9 +92,6 @@ function calculateLookback(
   };
 }
 
-/**
- * Calculates portfolio summary metrics for hero cards based on selected timeframe
- */
 export function calculatePortfolioSummary(
   performances: AssetPerformance[],
   timeframe: Timeframe
@@ -118,9 +106,6 @@ export function calculatePortfolioSummary(
     if (metric.past_value !== null) {
       previousTotal! += metric.past_value;
       hasValidLookback = true;
-    } else {
-      // If an asset didn't exist at the past date, assume 0 or exclude
-      // We still include its current value in net worth calculation
     }
   }
 

@@ -272,8 +272,8 @@ export const PrivacyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const formatCurrency = useCallback(
     (amount: number | null | undefined, forceDigits: number = 2): string => {
       if (amount === null || amount === undefined) return '—';
-      if (isPrivacyMode) return '$ •••,•••';
-      return `$${amount.toLocaleString('en-US', {
+      if (isPrivacyMode) return 'R •••,•••';
+      return `R ${amount.toLocaleString('en-ZA', {
         minimumFractionDigits: forceDigits,
         maximumFractionDigits: forceDigits,
       })}`;

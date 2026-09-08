@@ -33,7 +33,7 @@ export function HeroCards({ summary, selectedTimeframe, onTimeframeChange }: Her
             </button>
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Real-time balance metrics and rolling performance calculation engine
+            Real-time balance metrics and rolling performance calculation engine (ZAR)
           </p>
         </div>
 
@@ -66,8 +66,8 @@ export function HeroCards({ summary, selectedTimeframe, onTimeframeChange }: Her
           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl pointer-events-none" />
           <div className="flex items-center justify-between text-slate-400 mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider">Total Net Worth</span>
-            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              <DollarSign className="w-4 h-4" />
+            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold font-mono text-xs">
+              ZAR
             </div>
           </div>
           <div className="text-2xl sm:text-3xl font-extrabold text-white font-mono tracking-tight">
@@ -82,7 +82,7 @@ export function HeroCards({ summary, selectedTimeframe, onTimeframeChange }: Her
         {/* Card 2: Nominal Gain / Loss */}
         <div className="glass-card glass-card-hover p-5 rounded-2xl relative overflow-hidden">
           <div className="flex items-center justify-between text-slate-400 mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider">{selectedTimeframe} Change ($)</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">{selectedTimeframe} Change (R)</span>
             <div className={`p-2 rounded-xl border ${isPositive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
               {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
             </div>

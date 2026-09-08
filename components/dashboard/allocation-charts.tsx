@@ -22,11 +22,11 @@ interface AllocationChartsProps {
 }
 
 const CLASS_COLORS: Record<string, string> = {
-  Equities: '#3b82f6', // Blue
-  Crypto: '#8b5cf6', // Purple
-  'Cash & Equivalents': '#10b981', // Emerald
-  'Real Estate': '#f59e0b', // Amber
-  'Fixed Income': '#06b6d4', // Cyan
+  Equities: '#3b82f6',
+  Crypto: '#8b5cf6',
+  'Cash & Equivalents': '#10b981',
+  'Real Estate': '#f59e0b',
+  'Fixed Income': '#06b6d4',
 };
 
 const PLATFORM_COLORS = [
@@ -41,7 +41,6 @@ const PLATFORM_COLORS = [
 ];
 
 export function AllocationCharts({ performances, snapshots }: AllocationChartsProps) {
-  // Aggregate portfolio allocation by Asset Class
   const classAllocation = useMemo(() => {
     const map = new Map<string, number>();
     let total = 0;
@@ -61,7 +60,6 @@ export function AllocationCharts({ performances, snapshots }: AllocationChartsPr
     }));
   }, [performances]);
 
-  // Aggregate portfolio allocation by Platform
   const platformAllocation = useMemo(() => {
     const map = new Map<string, number>();
     let total = 0;
@@ -81,7 +79,6 @@ export function AllocationCharts({ performances, snapshots }: AllocationChartsPr
     }));
   }, [performances]);
 
-  // Generate historical net worth timeline data points from snapshots
   const historicalTimeline = useMemo(() => {
     const dateMap = new Map<string, number>();
 
@@ -93,13 +90,12 @@ export function AllocationCharts({ performances, snapshots }: AllocationChartsPr
     return Array.from(dateMap.entries())
       .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
       .map(([date, total_value]) => ({
-        date: new Date(date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+        date: new Date(date).toLocaleDateString('en-ZA', { month: 'short', year: '2-digit' }),
         fullDate: date,
         total_value,
       }));
   }, [snapshots]);
 
-  // Custom tooltip formatter
   const renderTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
@@ -107,7 +103,7 @@ export function AllocationCharts({ performances, snapshots }: AllocationChartsPr
         <div className="bg-slate-900 border border-slate-700/80 p-3 rounded-xl shadow-xl text-xs font-sans">
           <div className="font-bold text-white mb-1">{data.name || data.date || data.fullDate}</div>
           <div className="font-mono text-emerald-400 font-semibold">
-            ${(data.value || data.total_value)?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            R {(data.value || data.total_value)?.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}
           </div>
           {data.percentage !== undefined && (
             <div className="text-slate-400 mt-0.5">{data.percentage.toFixed(1)}% of portfolio</div>
@@ -126,7 +122,7 @@ export function AllocationCharts({ performances, snapshots }: AllocationChartsPr
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-blue-400" />
-              Portfolio Net Worth Timeline
+              Portfolio Net Worth Timeline (ZAR)
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">Historical point-in-time valuation progression</p>
           </div>
@@ -147,7 +143,7 @@ export function AllocationCharts({ performances, snapshots }: AllocationChartsPr
                 stroke="#64748b"
                 fontSize={11}
                 tickLine={false}
-                tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`}
+                tickFormatter={(val) => `R${val >= 1000000 ? (val / 1000000).toFixed(1) + 'M' : (val / 1000).toFixed(0) + 'k'}`}
               />
               <Tooltip content={renderTooltip} />
               <Area
@@ -165,8 +161,6 @@ export function AllocationCharts({ performances, snapshots }: AllocationChartsPr
 
       {/* Allocation Donut Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Donut 1: Asset Class Allocation */}
         <div className="glass-card p-6 rounded-2xl flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -199,7 +193,6 @@ export function AllocationCharts({ performances, snapshots }: AllocationChartsPr
             </div>
           </div>
 
-          {/* Legend */}
           <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-800">
             {classAllocation.map((item) => (
               <div key={item.name} className="flex items-center justify-between text-xs">
@@ -213,7 +206,6 @@ export function AllocationCharts({ performances, snapshots }: AllocationChartsPr
           </div>
         </div>
 
-        {/* Donut 2: Platform Allocation */}
         <div className="glass-card p-6 rounded-2xl flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -246,7 +238,6 @@ export function AllocationCharts({ performances, snapshots }: AllocationChartsPr
             </div>
           </div>
 
-          {/* Legend */}
           <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-800">
             {platformAllocation.map((item) => (
               <div key={item.name} className="flex items-center justify-between text-xs">

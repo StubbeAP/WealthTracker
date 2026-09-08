@@ -281,7 +281,7 @@ export async function createAsset(asset: {
       platform_id: asset.platform_id,
       asset_class_id: asset.asset_class_id,
       name: asset.name,
-      currency: asset.currency || 'USD',
+      currency: asset.currency || 'ZAR',
       is_active: true,
     });
 

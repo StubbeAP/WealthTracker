@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS public.wt_assets (
     platform_id UUID NOT NULL REFERENCES public.wt_platforms(id) ON DELETE CASCADE,
     asset_class_id UUID NOT NULL REFERENCES public.wt_asset_classes(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
-    currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+    currency VARCHAR(3) NOT NULL DEFAULT 'ZAR',
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );

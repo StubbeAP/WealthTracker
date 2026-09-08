@@ -22,7 +22,6 @@ export function BulkEntryGrid({ assets, snapshots, platforms }: BulkEntryGridPro
   const [isPending, startTransition] = useTransition();
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Group active assets by platform
   const groupedAssets = useMemo(() => {
     const activeAssets = assets.filter((a) => a.is_active);
     const map = new Map<string, Asset[]>();
@@ -38,7 +37,6 @@ export function BulkEntryGrid({ assets, snapshots, platforms }: BulkEntryGridPro
     return Array.from(map.entries()).filter(([_, list]) => list.length > 0);
   }, [assets, platforms]);
 
-  // Find latest snapshot for each asset
   const latestSnapshotMap = useMemo(() => {
     const map = new Map<string, AssetSnapshot>();
     snapshots.forEach((s) => {
@@ -122,12 +120,11 @@ export function BulkEntryGrid({ assets, snapshots, platforms }: BulkEntryGridPro
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Header Controls */}
       <div className="glass-card p-6 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Calendar className="w-6 h-6 text-blue-400" />
-            Bulk Snapshot Entry
+            Bulk Snapshot Entry (ZAR)
           </h1>
           <p className="text-xs text-slate-400 mt-1">
             Record point-in-time valuations across all your active accounts for batch calculation.
@@ -135,7 +132,6 @@ export function BulkEntryGrid({ assets, snapshots, platforms }: BulkEntryGridPro
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* Date Picker */}
           <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5">
             <span className="text-xs text-slate-400 font-medium">Snapshot Date:</span>
             <input
@@ -146,7 +142,6 @@ export function BulkEntryGrid({ assets, snapshots, platforms }: BulkEntryGridPro
             />
           </div>
 
-          {/* Quick Copy Previous Button */}
           <button
             type="button"
             onClick={handleCopyLastValues}
@@ -156,7 +151,6 @@ export function BulkEntryGrid({ assets, snapshots, platforms }: BulkEntryGridPro
             Copy Last Values
           </button>
 
-          {/* Save All Button */}
           <button
             type="button"
             onClick={handleSaveAll}
@@ -169,7 +163,6 @@ export function BulkEntryGrid({ assets, snapshots, platforms }: BulkEntryGridPro
         </div>
       </div>
 
-      {/* Status Notification */}
       {statusMessage && (
         <div
           className={`p-4 rounded-xl text-xs font-medium flex items-center gap-2 ${
@@ -187,11 +180,9 @@ export function BulkEntryGrid({ assets, snapshots, platforms }: BulkEntryGridPro
         </div>
       )}
 
-      {/* Grouped Assets Grid */}
       <div className="space-y-6">
         {groupedAssets.map(([platformName, platformAssets]) => (
           <div key={platformName} className="glass-card rounded-2xl overflow-hidden">
-            {/* Group Header */}
             <div className="bg-slate-900/90 px-6 py-3 border-b border-slate-800 flex items-center justify-between">
               <span className="font-bold text-sm text-slate-200 flex items-center gap-2">
                 <Layers className="w-4 h-4 text-cyan-400" />
@@ -200,7 +191,6 @@ export function BulkEntryGrid({ assets, snapshots, platforms }: BulkEntryGridPro
               <span className="text-xs text-slate-400 font-mono">{platformAssets.length} Assets</span>
             </div>
 
-            {/* Asset Rows */}
             <div className="divide-y divide-slate-800/60">
               {platformAssets.map((asset) => {
                 const latest = latestSnapshotMap.get(asset.id);
@@ -212,7 +202,6 @@ export function BulkEntryGrid({ assets, snapshots, platforms }: BulkEntryGridPro
                     key={asset.id}
                     className="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-900/40 transition-colors"
                   >
-                    {/* Left: Asset info & Last recorded info */}
                     <div className="sm:w-1/3">
                       <div className="font-semibold text-sm text-white">{asset.name}</div>
                       <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
@@ -224,10 +213,9 @@ export function BulkEntryGrid({ assets, snapshots, platforms }: BulkEntryGridPro
                       </div>
                     </div>
 
-                    {/* Right: Value input & Notes input */}
                     <div className="flex flex-1 items-center gap-3">
                       <div className="relative flex-1">
-                        <span className="absolute left-3 top-2.5 text-xs text-slate-500 font-mono">$</span>
+                        <span className="absolute left-3 top-2.5 text-xs text-slate-500 font-mono">R</span>
                         <input
                           type="number"
                           step="0.01"

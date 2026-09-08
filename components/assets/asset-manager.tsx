@@ -67,7 +67,7 @@ export function AssetManager({ platforms, assetClasses, assets }: AssetManagerPr
         name: newAssetName.trim(),
         platform_id: selectedPlatformId,
         asset_class_id: selectedClassId,
-        currency: 'USD',
+        currency: 'ZAR',
       });
       if (res.success) {
         setNewAssetName('');
